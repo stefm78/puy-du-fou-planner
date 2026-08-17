@@ -1,0 +1,12 @@
+{
+  "name":"Puy du Fou — Planner famille",
+  "short_name":"Puy Planner",
+  "description":"Planner familial replanifiable pour les 18 et 19 août 2026.",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#f5f1e9",
+  "theme_color":"#701c2b",
+  "lang":"fr-FR",
+  "icons":[{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
