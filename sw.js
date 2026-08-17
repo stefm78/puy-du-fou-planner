@@ -1,5 +1,5 @@
-const CACHE_NAME='puy-planner-v1.3.0';
-const CORE=['./','./index.html','./styles.css','./data.js','./solver.js','./app.js','./manifest.webmanifest','./icon.svg'];
+const CACHE_NAME='puy-planner-v1.3.1';
+const CORE=['./','./index.html','./styles.css','./data.js','./solver.js','./app.js','./app-core.js','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(CORE)))});
 self.addEventListener('activate',event=>{event.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith('puy-planner-')&&k!==CACHE_NAME).map(k=>caches.delete(k)));await self.clients.claim()})())});
 self.addEventListener('message',event=>{if(event.data?.type==='SKIP_WAITING')self.skipWaiting()});

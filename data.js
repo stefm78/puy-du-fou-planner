@@ -1,6 +1,6 @@
 window.PUY_DATA = {
   sourceEdit: "17/08/2026 19:48",
-  appVersion: "1.3.0",
+  appVersion: "1.3.1",
   engineVersion: 2,
   placementPriorityMin: 40,
   normalShowBufferMin: 10,
@@ -49,7 +49,7 @@ window.PUY_DATA = {
   },
   fallbackPlans: {
     18:[
-      {kind:"show",id:3,start:"10:15"},
+      {kind:"show",id:3,start:"10:15",openingMove:true,note:"Contre-courant : partir vers le haut dès l’ouverture"},
       {kind:"show",id:2,start:"12:15"},
       {kind:"show",id:1,start:"17:00"},
       {kind:"fixed",id:"dinner",start:"20:00",duration:75,zone:"B",name:"Café de la Madelon — rendez-vous",note:"Réservation 20:15 · durée estimée"},
@@ -57,8 +57,8 @@ window.PUY_DATA = {
     ],
     19:[
       {kind:"show",id:4,start:"10:30"},
-      {kind:"show",id:7,start:"13:45"},
-      {kind:"show",id:5,start:"16:30"},
+      {kind:"show",id:7,start:"12:30"},
+      {kind:"show",id:5,start:"15:15"},
       {kind:"show",id:6,start:"18:15"}
     ]
   }
