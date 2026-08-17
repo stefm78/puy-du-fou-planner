@@ -1,7 +1,7 @@
 window.PUY_DATA = {
   sourceEdit: "17/08/2026 19:48",
-  appVersion: "1.4.0",
-  engineVersion: 3,
+  appVersion: "1.4.1",
+  engineVersion: 4,
   placementPriorityMin: 40,
   normalShowBufferMin: 10,
   fillerSafetyMin: 12,
@@ -26,6 +26,7 @@ window.PUY_DATA = {
       "7":{day:18,start:"19:00"}
     },
     nominalOptional:{
+      "9":{day:19,start:"10:00",protected:true,guardAnchor:{id:1,start:"11:15",postExitSafetyMin:0}},
       "10":{day:18,start:"13:56"},
       "19":{day:18,start:"16:07"},
       "12":{day:18,start:"17:15"},
@@ -70,7 +71,8 @@ window.PUY_DATA = {
       {kind:"fixed",id:"noces",start:"22:00",duration:30,zone:"M",name:"Les Noces de Feu",note:"Spectacle nocturne",arrivalBuffer:20}
     ],
     19:[
-      {kind:"show",id:1,start:"11:15",openingMove:true,note:"Contre-courant H→M→B : partir vers le Haut dès l’ouverture"},
+      {kind:"show",id:9,start:"10:00",openingMove:true,guardAnchor:{id:1,start:"11:15"},note:"Séquence protégée Arthur → Signe : le Signe reste prioritaire en cas de retard"},
+      {kind:"show",id:1,start:"11:15"},
       {kind:"lunch",id:"lunch",start:"12:01",duration:45,zone:"H",name:"Déjeuner"},
       {kind:"flex",id:18,start:"12:59"},
       {kind:"show",id:13,start:"14:00"},
