@@ -38,7 +38,7 @@
   </section>
 
   <section id="showsView" class="view">
-    <div class="notice"><strong>Priorité O :</strong> pour les spectacles 1 à 7, le planner vise une arrivée 40 min avant. Cette marge inclut l'ouverture officielle des tribunes 30 min avant et 10 min de sécurité familiale.</div>
+    <div class="notice"><strong>Priorité O :</strong> pour les spectacles 1 à 7, le planner réserve 40 min de placement. Il optimise désormais les deux jours ensemble : un O n'est plus placé tôt simplement parce qu'il est prioritaire.</div>
     <div class="sectionTitle">Spectacles & activités</div>
     <div class="list" id="showsList"></div>
   </section>
@@ -55,18 +55,18 @@
         <div class="zonebox"><b>M</b><div class="small">Milieu<br>6 · 10 · 12 · 13 · 19</div></div>
         <div class="zonebox"><b>B</b><div class="small">Bas<br>4 · 5 · 7 · 8 · 11</div></div>
       </div>
-      <div class="notice" style="margin-top:12px"><strong>Principe :</strong> le moteur pénalise les traversées H↔B et privilégie les séquences dans une même zone.</div>
+      <div class="notice" style="margin-top:12px"><strong>Contre-courant :</strong> au début du 18, le solveur privilégie un départ vers le Haut dès l'ouverture, puis pénalise les retours H↔B et les changements de direction inutiles.</div>
     </div>
   </section>
 
   <section id="replanView" class="view">
     <div class="card">
       <div class="eyebrow">Incident ou envie de changer ?</div>
-      <h2 style="margin:.3rem 0 .4rem">Recalculer sans se perdre</h2>
-      <p class="small">Le moteur local traite les cas simples. S'il détecte un arbitrage risqué, il vous demande explicitement de revenir dans ChatGPT avec un état prêt à copier.</p>
+      <h2 style="margin:.3rem 0 .4rem">Recalcul global 18 + 19</h2>
+      <p class="small">Le moteur recherche d'abord un squelette qui conserve tous les spectacles O sur les deux jours, puis ajoute les activités secondaires uniquement dans les créneaux sûrs. Si ce n'est plus possible, il vous demande explicitement ChatGPT.</p>
       <div class="actions" style="margin-top:12px">
-        <button class="btn primary wide" onclick="recalculate(true)">↻ Recalculer maintenant</button>
-        <button class="btn outline wide" onclick="openAlternatives()">⇄ Changer la prochaine étape</button>
+        <button class="btn primary wide" onclick="recalculate(true)">↻ Réoptimiser les deux jours</button>
+        <button class="btn outline wide" onclick="openAlternatives()">⇄ Changer le prochain grand spectacle</button>
         <button class="btn outline wide" onclick="openChatGPT()">🤖 Demander à ChatGPT</button>
         <button class="btn outline wide" onclick="undoLast()">↶ Annuler</button>
       </div>
@@ -76,7 +76,7 @@
       <div class="settingsrow"><span>Je suis dans</span><select id="zoneSelect" onchange="manualZone(this.value)"><option value="auto">Automatique</option><option value="H">Haut</option><option value="M">Milieu</option><option value="B">Bas</option></select></div>
       <div class="small">En automatique, la position est déduite de la dernière activité. Corrigez-la ici si vous vous êtes déplacés ailleurs.</div>
     </div>
-    <div class="card"><div class="eyebrow">Diagnostic</div><div id="engineState" class="small"></div></div>
+    <div class="card"><div class="eyebrow">Diagnostic du solveur</div><div id="engineState" class="small"></div></div>
   </section>
 </main>
 </div>
@@ -90,6 +90,7 @@
 
 <div id="modal" class="modal"><div id="sheet" class="sheet"></div></div>
 <script src="./data.js"></script>
+<script src="./solver.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

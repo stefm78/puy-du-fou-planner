@@ -1,12 +1,27 @@
 window.PUY_DATA = {
   sourceEdit: "17/08/2026 19:48",
-  appVersion: "1.2.0",
+  appVersion: "1.3.0",
+  engineVersion: 2,
   placementPriorityMin: 40,
-  heatWindow: [810, 1020],
+  normalShowBufferMin: 10,
+  fillerSafetyMin: 12,
+  comfortSlackMin: 10,
+  opening: {18:"09:00",19:"09:00"},
+  planningEnd: {18:"20:00",19:"20:30"},
+  heatWindow: {18:[810,1005],19:[810,1005]},
   travel: {
     H:{H:8,M:14,B:22},
     M:{H:14,M:7,B:14},
     B:{H:22,M:14,B:8}
+  },
+  strategy: {
+    label:"Contre-courant",
+    deepStartDay:18,
+    deepZone:"H",
+    deepStartBestBefore:"10:45",
+    deepStartGoodBefore:"11:45",
+    entranceZone:"B",
+    earlyEntranceZoneUntil:"11:15"
   },
   activities: [
     {id:1,name:"Le Signe du Triomphe",zone:"H",priority:true,covered:false,duration:35,sessions:["11:15","14:15","17:00"]},
@@ -25,29 +40,26 @@ window.PUY_DATA = {
     {id:18,name:"Le Mystère de La Pérouse",zone:"H",priority:false,covered:true,duration:20,continuous:[["10:15","20:30"]]},
     {id:19,name:"Les Amoureux de Verdun",zone:"M",priority:false,covered:true,duration:15,continuous:[["11:15","19:30"]]}
   ],
-  homeDay: {"1":19,"2":19,"3":19,"4":18,"5":18,"6":18,"7":18},
-  initialPlans: {
+  fixed: {
     18:[
-      {kind:"show",id:4,start:"10:30"},
-      {kind:"show",id:7,start:"12:30"},
-      {kind:"lunch",start:"13:10",duration:45,zone:"B",name:"Déjeuner"},
-      {kind:"show",id:6,start:"15:15"},
-      {kind:"flex",id:19,start:"16:10"},
-      {kind:"flex",id:8,start:"16:45"},
-      {kind:"show",id:5,start:"18:15"},
-      {kind:"show",id:11,start:"19:15"},
-      {kind:"fixed",id:"dinner",start:"20:00",duration:75,zone:"B",name:"Café de la Madelon — rendez-vous",note:"Réservation 20:15"},
-      {kind:"fixed",id:"noces",start:"22:00",duration:30,zone:"M",name:"Les Noces de Feu",note:"Spectacle nocturne"}
+      {kind:"fixed",id:"dinner",start:"20:00",duration:75,zone:"B",name:"Café de la Madelon — rendez-vous",note:"Réservation 20:15 · durée estimée"},
+      {kind:"fixed",id:"noces",start:"22:00",duration:30,zone:"M",name:"Les Noces de Feu",note:"Spectacle nocturne",arrivalBuffer:20}
+    ],
+    19:[]
+  },
+  fallbackPlans: {
+    18:[
+      {kind:"show",id:3,start:"10:15"},
+      {kind:"show",id:2,start:"12:15"},
+      {kind:"show",id:1,start:"17:00"},
+      {kind:"fixed",id:"dinner",start:"20:00",duration:75,zone:"B",name:"Café de la Madelon — rendez-vous",note:"Réservation 20:15 · durée estimée"},
+      {kind:"fixed",id:"noces",start:"22:00",duration:30,zone:"M",name:"Les Noces de Feu",note:"Spectacle nocturne",arrivalBuffer:20}
     ],
     19:[
-      {kind:"show",id:3,start:"10:15"},
-      {kind:"flex",id:18,start:"11:05"},
-      {kind:"show",id:2,start:"12:15"},
-      {kind:"lunch",start:"13:00",duration:50,zone:"H",name:"Déjeuner"},
-      {kind:"show",id:9,start:"15:00"},
-      {kind:"show",id:1,start:"17:00"},
-      {kind:"flex",id:19,start:"18:00"},
-      {kind:"show",id:12,start:"19:45"}
+      {kind:"show",id:4,start:"10:30"},
+      {kind:"show",id:7,start:"13:45"},
+      {kind:"show",id:5,start:"16:30"},
+      {kind:"show",id:6,start:"18:15"}
     ]
   }
 };
