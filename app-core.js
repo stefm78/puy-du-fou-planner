@@ -9,9 +9,9 @@ const DEFAULT={
   manualZone:{18:'auto',19:'auto'},lastZone:{18:null,19:null},virtualTime:{18:'09:00',19:'09:00'},
   customPlan:{18:null,19:null},lunchDone:{18:false,19:false},solverMeta:null,history:[]
 };
+const clone=x=>JSON.parse(JSON.stringify(x));
 let state=loadState(),swRegistration=null,toastTimer=null;
 
-const clone=x=>JSON.parse(JSON.stringify(x));
 const min=window.PuySolver.minutes,tm=window.PuySolver.time;
 function todayKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function isLiveDay(day){return todayKey()===`2026-08-${day}`}
