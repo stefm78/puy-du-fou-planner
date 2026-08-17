@@ -29,30 +29,36 @@ jobs:
           const d = window.PUY_DATA;
           const assert = (x,m) => { if(!x) throw new Error(m); };
           assert(d.sourceEdit === '17/08/2026 19:48','wrong source edition');
-          assert(d.appVersion === '1.3.5','wrong app version');
-          assert(d.engineVersion === 2,'wrong engine version');
+          assert(d.appVersion === '1.4.0','wrong app version');
+          assert(d.engineVersion === 3,'wrong engine version');
           assert(d.activities.length === 15,'unexpected activity count');
           for (let i=1;i<=7;i++) assert(d.activities.find(a=>a.id===i)?.priority === true,`priority O missing for ${i}`);
-          assert(!('homeDay' in d),'legacy pre-assignment homeDay must stay removed');
+          assert(!('homeDay' in d),'legacy hard homeDay pre-assignment must stay removed');
+          assert(d.strategy.label === 'Contre-courant H→M→B','wrong strategy label');
+          assert(JSON.stringify(d.strategy.descentOrder) === JSON.stringify(['H','M','B']),'wrong descent order');
+          assert(d.strategy.nominalPriority['3'].day===18&&d.strategy.nominalPriority['3'].start==='10:15','Bal nominal target missing');
+          assert(d.strategy.nominalPriority['1'].day===19&&d.strategy.nominalPriority['1'].start==='11:15','Signe day-19 counter-flow target missing');
           assert(d.fixed[18].some(x=>x.id==='dinner'&&x.start==='20:00'),'Madelon 20:00 missing');
           assert(d.fixed[18].some(x=>x.id==='noces'&&x.start==='22:00'),'Noces 22:00 missing');
-          assert(d.opening[18] === '09:00','operational opening must start planning at 09:00');
-          assert(d.fallbackPlans[18][0].id===3&&d.fallbackPlans[18][0].openingMove===true,'instant fallback must expose counter-flow opening');
+          assert(d.opening[18] === '09:00'&&d.opening[19] === '09:00','operational opening must start at 09:00 both days');
+          assert(d.fallbackPlans[18][0].id===3&&d.fallbackPlans[18][0].openingMove===true,'day-18 nominal counter-flow missing');
+          assert(d.fallbackPlans[19][0].id===1&&d.fallbackPlans[19][0].openingMove===true,'day-19 nominal counter-flow missing');
+          assert(d.fallbackPlans[18].some(x=>x.id===10)&&d.fallbackPlans[19].some(x=>x.id===18),'nominal plans must include non-O activities');
           console.log('Data invariants OK');
           NODE
-      - name: Global solver scenarios
+      - name: H-M-B solver scenarios
         run: node tests/solver.test.js
-      - name: iPhone fail-fast boot
+      - name: Mobile fail-fast boot
         run: |
-          grep -q "VERSION='1.3.5'" app.js
+          grep -q "VERSION='1.4.0'" app.js
           grep -q "SCRIPT_TIMEOUT_MS=4500" app.js
           grep -q "seedInstantPlan" app.js
           grep -q "renderInstantFallback" app.js
           grep -q "PUY_BOOT_DIAG_V1" app.js
           grep -q "Recharger avec force" app.js
           grep -Fq "bootState?.solverMeta?.fallback" app.js
-          grep -q "itinéraire complet" app.js
-          grep -q "puy-planner-v1.3.5" sw.js
+          grep -q "plan nominal" app.js
+          grep -q "puy-planner-v1.4.0" sw.js
           node <<'NODE'
           const fs=require('fs');
           const s=fs.readFileSync('app-core.js','utf8');
