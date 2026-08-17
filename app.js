@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const VERSION='1.3.4';
+const VERSION='1.3.5';
 const STORE='puyPlannerV4';
 const SCRIPT_TIMEOUT_MS=4500;
 const status=document.getElementById('sourceLine');
@@ -127,10 +127,16 @@ async function boot(){
     await loadScript(`./app-core.js?v=${VERSION}`,'app-core.js');
     if(typeof window.recalculate!=='function')throw new Error('Interface chargée mais moteur non exposé');
 
-    // Aucun calcul global automatique au démarrage : le plan de référence est pré-calculé.
-    // Les recalculs ne sont lancés qu'après une action utilisateur ou un incident.
+    // Le plan de secours sert uniquement à afficher quelque chose immédiatement.
+    // Dès que le moteur complet est disponible, on le remplace par le vrai itinéraire enrichi.
+    const bootState=JSON.parse(localStorage.getItem(STORE)||'null');
+    if(bootState?.solverMeta?.fallback){
+      setProgress('3/3 · Interface',90,'Construction de l’itinéraire complet : O + activités secondaires + pauses.');
+      window.recalculate(false);
+    }
+
     stopTicker();
-    setProgress('Prêt',100,'Planner opérationnel · aucun calcul de démarrage en attente.','done');
+    setProgress('Prêt',100,'Planner opérationnel · itinéraire complet calculé.','done');
     setTimeout(()=>document.getElementById('engineProgress')?.remove(),1400);
   }catch(err){console.error('Boot planner',err);showFailure(err)}
 }
