@@ -1,6 +1,6 @@
 window.PUY_DATA = {
   sourceEdit: "17/08/2026 19:48",
-  appVersion: "1.3.1",
+  appVersion: "1.3.2",
   engineVersion: 2,
   placementPriorityMin: 40,
   normalShowBufferMin: 10,
