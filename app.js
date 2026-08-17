@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const VERSION='1.3.5';
+const VERSION='1.4.0';
 const STORE='puyPlannerV4';
 const SCRIPT_TIMEOUT_MS=4500;
 const status=document.getElementById('sourceLine');
@@ -98,45 +98,43 @@ function fallbackZone(e){const a=window.PUY_DATA?.activities?.find(x=>String(x.i
 function renderInstantFallback(){
   const D=window.PUY_DATA;if(!D)return;
   const plan=D.fallbackPlans?.[18]||[];const first=plan[0];
-  if(status)status.textContent=`Plan secours prêt · moteur en chargement · v${VERSION}`;
-  const sb=document.getElementById('statusbar');if(sb)sb.innerHTML='<span class="chip good">Plan secours actif</span><span class="chip">18 août</span><span class="chip">Moteur en chargement</span>';
-  const box=document.getElementById('nextCard');if(box&&first)box.innerHTML=`<div class="eyebrow">PLAN DISPONIBLE IMMÉDIATEMENT</div><div class="nexttitle">${first.id} · ${fallbackName(first)}</div><div class="meta"><span class="badge zone">${fallbackZone(first)}</span><span class="badge o">O · grand spectacle</span><span class="badge cover">contre-courant</span></div><div class="countdown safe"><strong>${first.start}</strong><span class="small">Le planning de référence est utilisable pendant le chargement du moteur.</span></div>`;
-  const tl=document.getElementById('timeline');if(tl)tl.innerHTML=plan.map(e=>`<div class="item ${Number(e.id)<=7?'priority':''} ${e.kind==='fixed'?'fixed':''}"><div class="time">${e.start}</div><div><div class="iname">${Number.isFinite(Number(e.id))?e.id+' · ':''}${fallbackName(e)}</div><div class="isub">${fallbackZone(e)} · plan secours</div></div><div class="dot"></div></div>`).join('');
+  if(status)status.textContent=`Plan nominal prêt · moteur en chargement · v${VERSION}`;
+  const sb=document.getElementById('statusbar');if(sb)sb.innerHTML='<span class="chip good">Plan nominal actif</span><span class="chip">18 août</span><span class="chip">Moteur en chargement</span>';
+  const box=document.getElementById('nextCard');if(box&&first)box.innerHTML=`<div class="eyebrow">PLAN DISPONIBLE IMMÉDIATEMENT</div><div class="nexttitle">${first.id} · ${fallbackName(first)}</div><div class="meta"><span class="badge zone">${fallbackZone(first)}</span><span class="badge o">O · grand spectacle</span><span class="badge cover">contre-courant</span></div><div class="countdown safe"><strong>${first.start}</strong><span class="small">Le planning nominal H→M→B est utilisable pendant l’initialisation du moteur.</span></div>`;
+  const tl=document.getElementById('timeline');if(tl)tl.innerHTML=plan.map(e=>`<div class="item ${Number(e.id)<=7?'priority':''} ${e.kind==='fixed'?'fixed':''}"><div class="time">${e.start}</div><div><div class="iname">${Number.isFinite(Number(e.id))?e.id+' · ':''}${fallbackName(e)}</div><div class="isub">${fallbackZone(e)} · plan nominal</div></div><div class="dot"></div></div>`).join('');
 }
 function showFailure(err){
   bootError=err;stopTicker();
-  if(status)status.textContent='Mode secours · moteur non chargé';
+  if(status)status.textContent='Mode nominal · moteur non chargé';
   const p=ensureProgress();
-  if(p){p.dataset.state='failed';p.className='alert';p.innerHTML=`<b>Le moteur n'a pas terminé son initialisation.</b><br>Le plan de secours reste affiché et aucune progression de visite n'a été effacée.<div class="small" style="margin-top:6px">Étape : <b>${bootStage}</b> · ${elapsed()} s · ${err.message}</div><div class="actions" style="margin-top:9px"><button class="btn primary" onclick="forceReload()">↻ Recharger avec force</button><button class="btn outline" onclick="copyBootDiagnostic()">Copier diagnostic</button></div>`}
+  if(p){p.dataset.state='failed';p.className='alert';p.innerHTML=`<b>Le moteur n'a pas terminé son initialisation.</b><br>Le plan nominal reste affiché et aucune progression de visite n'a été effacée.<div class="small" style="margin-top:6px">Étape : <b>${bootStage}</b> · ${elapsed()} s · ${err.message}</div><div class="actions" style="margin-top:9px"><button class="btn primary" onclick="forceReload()">↻ Recharger avec force</button><button class="btn outline" onclick="copyBootDiagnostic()">Copier diagnostic</button></div>`}
 }
 async function boot(){
   try{
     startTicker();
-    setProgress('1/3 · Préparation',15,'Chargement des données et du plan de secours.');
+    setProgress('1/3 · Préparation',15,'Chargement des données et du plan nominal H→M→B.');
     if(!window.PUY_DATA)throw new Error('Données du programme indisponibles');
     seedInstantPlan();
     renderInstantFallback();
     await new Promise(r=>setTimeout(r,30));
 
     if(!window.PuySolver){
-      setProgress('2/3 · Moteur',45,'Chargement du solveur global.');
+      setProgress('2/3 · Moteur',45,'Chargement du moteur de réparation global.');
       await loadScript(`./solver.js?v=${VERSION}`,'solver.js');
-    }else setProgress('2/3 · Moteur',60,'Solveur déjà disponible.');
+    }else setProgress('2/3 · Moteur',60,'Moteur déjà disponible.');
 
     setProgress('3/3 · Interface',78,'Chargement des interactions du planner.');
     await loadScript(`./app-core.js?v=${VERSION}`,'app-core.js');
     if(typeof window.recalculate!=='function')throw new Error('Interface chargée mais moteur non exposé');
 
-    // Le plan de secours sert uniquement à afficher quelque chose immédiatement.
-    // Dès que le moteur complet est disponible, on le remplace par le vrai itinéraire enrichi.
     const bootState=JSON.parse(localStorage.getItem(STORE)||'null');
     if(bootState?.solverMeta?.fallback){
-      setProgress('3/3 · Interface',90,'Construction de l’itinéraire complet : O + activités secondaires + pauses.');
+      setProgress('3/3 · Interface',90,'Validation du plan nominal et insertion des activités secondaires.');
       window.recalculate(false);
     }
 
     stopTicker();
-    setProgress('Prêt',100,'Planner opérationnel · itinéraire complet calculé.','done');
+    setProgress('Prêt',100,'Planner opérationnel · H→M→B sur les deux jours.','done');
     setTimeout(()=>document.getElementById('engineProgress')?.remove(),1400);
   }catch(err){console.error('Boot planner',err);showFailure(err)}
 }
