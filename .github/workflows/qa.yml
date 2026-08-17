@@ -29,7 +29,7 @@ jobs:
           const d = window.PUY_DATA;
           const assert = (x,m) => { if(!x) throw new Error(m); };
           assert(d.sourceEdit === '17/08/2026 19:48','wrong source edition');
-          assert(d.appVersion === '1.3.2','wrong app version');
+          assert(d.appVersion === '1.3.3','wrong app version');
           assert(d.engineVersion === 2,'wrong engine version');
           assert(d.activities.length === 15,'unexpected activity count');
           for (let i=1;i<=7;i++) assert(d.activities.find(a=>a.id===i)?.priority === true,`priority O missing for ${i}`);
@@ -42,14 +42,15 @@ jobs:
           NODE
       - name: Global solver scenarios
         run: node tests/solver.test.js
-      - name: iPhone boot compatibility
+      - name: iPhone fail-fast boot
         run: |
-          grep -q "if(!window.PuySolver)" app.js
+          grep -q "SCRIPT_TIMEOUT_MS=4500" app.js
           grep -q "seedInstantPlan" app.js
-          grep -q "app-core.js" app.js
-          grep -q "Mode secours" app.js
-          grep -q "app-core.js" sw.js
-          grep -q "puy-planner-v1.3.2" sw.js
+          grep -q "renderInstantFallback" app.js
+          grep -q "PUY_BOOT_DIAG_V1" app.js
+          grep -q "Recharger avec force" app.js
+          grep -q "aucun calcul de démarrage" app.js
+          grep -q "puy-planner-v1.3.3" sw.js
       - name: PWA integrity
         run: |
           test -f index.html
