@@ -29,7 +29,7 @@ jobs:
           const d = window.PUY_DATA;
           const assert = (x,m) => { if(!x) throw new Error(m); };
           assert(d.sourceEdit === '17/08/2026 19:48','wrong source edition');
-          assert(d.appVersion === '1.3.3','wrong app version');
+          assert(d.appVersion === '1.3.4','wrong app version');
           assert(d.engineVersion === 2,'wrong engine version');
           assert(d.activities.length === 15,'unexpected activity count');
           for (let i=1;i<=7;i++) assert(d.activities.find(a=>a.id===i)?.priority === true,`priority O missing for ${i}`);
@@ -44,13 +44,22 @@ jobs:
         run: node tests/solver.test.js
       - name: iPhone fail-fast boot
         run: |
+          grep -q "VERSION='1.3.4'" app.js
           grep -q "SCRIPT_TIMEOUT_MS=4500" app.js
           grep -q "seedInstantPlan" app.js
           grep -q "renderInstantFallback" app.js
           grep -q "PUY_BOOT_DIAG_V1" app.js
           grep -q "Recharger avec force" app.js
           grep -q "aucun calcul de démarrage" app.js
-          grep -q "puy-planner-v1.3.3" sw.js
+          grep -q "puy-planner-v1.3.4" sw.js
+          node <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('app-core.js','utf8');
+          const clone=s.indexOf('const clone=');
+          const state=s.indexOf('let state=loadState()');
+          if(clone<0||state<0||clone>state) throw new Error('clone must be initialized before loadState runs');
+          console.log('Core boot ordering OK');
+          NODE
       - name: PWA integrity
         run: |
           test -f index.html
