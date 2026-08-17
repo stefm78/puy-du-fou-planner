@@ -1,0 +1,50 @@
+name: QA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: JavaScript syntax
+        run: |
+          node --check app.js
+          node --check data.js
+          node --check sw.js
+      - name: Data invariants
+        run: |
+          node <<'NODE'
+          global.window = {};
+          require('./data.js');
+          const d = window.PUY_DATA;
+          const assert = (x,m) => { if(!x) throw new Error(m); };
+          assert(d.sourceEdit === '17/08/2026 19:48','wrong source edition');
+          assert(d.activities.length === 15,'unexpected activity count');
+          for (let i=1;i<=7;i++) assert(d.activities.find(a=>a.id===i)?.priority === true,`priority O missing for ${i}`);
+          assert(d.initialPlans[18].some(x=>x.id==='dinner'&&x.start==='20:00'),'Madelon 20:00 missing');
+          assert(d.initialPlans[18].some(x=>x.id==='noces'&&x.start==='22:00'),'Noces 22:00 missing');
+          assert(d.initialPlans[19].length>0,'day 19 provisional plan missing');
+          console.log('Data invariants OK');
+          NODE
+      - name: PWA integrity
+        run: |
+          test -f index.html
+          test -f manifest.webmanifest
+          test -f sw.js
+          test -f styles.css
+          test -f app.js
+          test -f data.js
+          grep -q 'manifest.webmanifest' index.html
+          grep -q 'serviceWorker' app.js
+          grep -q 'ChatGPT est nécessaire' app.js
+          grep -q "puy-planner-v1.2.0" sw.js
+      - name: No accidental remote runtime dependency
+        run: |
+          ! grep -Eqi '<script[^>]+src="https?://|<link[^>]+href="https?://' index.html
