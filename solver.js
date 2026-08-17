@@ -157,15 +157,41 @@ function create(data){
     return aZone===z;
   }
 
+  function nominalOptionalTarget(day,a,start){
+    const target=data.strategy.nominalOptional?.[String(a.id)];
+    if(!target||Number(target.day)!==Number(day)||target.start!==tm(start)) return null;
+    return target;
+  }
+
   function optionalNominalScore(day,a,start){
     const target=data.strategy.nominalOptional?.[String(a.id)];
     if(!target) return 0;
     if(Number(target.day)!==Number(day)) return -45;
+    if(target.protected&&target.start===tm(start)) return 260;
     return Math.max(20,120-Math.abs(start-min(target.start))*1.5);
   }
 
+  function optionalSafety(day,a,start,deadline,nextZone){
+    const target=nominalOptionalTarget(day,a,start),guard=target?.protected?target.guardAnchor:null;
+    const anchor=guard?A[String(guard.id)]:null;
+    if(!guard||!anchor||anchor.zone!==nextZone) return data.fillerSafetyMin;
+    if(guard.start!==tm(deadline+data.placementPriorityMin)) return data.fillerSafetyMin;
+    return guard.postExitSafetyMin??0;
+  }
+
+  function optionalEntry(day,a,s,openingJump){
+    const target=nominalOptionalTarget(day,a,min(s));
+    const entry={kind:'show',id:a.id,start:s};
+    if(target?.protected&&target.guardAnchor){
+      entry.guardAnchor={id:target.guardAnchor.id,start:target.guardAnchor.start};
+      entry.note=`Séquence protégée ${a.name} → ${A[String(target.guardAnchor.id)]?.name||target.guardAnchor.id} : le grand spectacle reste prioritaire en cas de retard`;
+      if(openingJump) entry.openingMove=true;
+    }
+    return entry;
+  }
+
   function optionalCandidate(input,day,cursor,z,deadline,nextZone,used,openingJump=false){
-    const candidates=[],safety=data.fillerSafetyMin;
+    const candidates=[];
     for(const a of data.activities){
       if(a.priority||globallyDone(input,a.id)||used.has(String(a.id))) continue;
       if(!zoneAllowedForFiller(a.zone,z,nextZone,openingJump)) continue;
@@ -173,18 +199,20 @@ function create(data){
       if(a.sessions){
         for(const s of sessionsFor(a,day)){
           if(isBlocked(input,day,a.id,s)) continue;
-          const st=min(s),arr=st-data.normalShowBufferMin,walk=travel(z,a.zone); if(cursor+walk+(data.optionalArrivalSafetyMin??4)>arr) continue;
-          const finish=st+a.duration+3; if(finish+travel(a.zone,nextZone)+safety>deadline) continue;
+          const st=min(s),arr=st-data.normalShowBufferMin,walk=travel(z,a.zone);
+          if(cursor+walk+(data.optionalArrivalSafetyMin??4)>arr) continue;
+          const finish=st+a.duration+3,safety=optionalSafety(day,a,st,deadline,nextZone);
+          if(finish+travel(a.zone,nextZone)+safety>deadline) continue;
           const descent=(zoneVal[z]-zoneVal[a.zone])*50;
           const hot=st>=heat[0]&&st<heat[1],outdoorHeat=day===18?90:25,coveredHeat=day===18?60:20;
           let score=(a.zone===z?50:0)+(a.covered&&hot?coveredHeat:0)-(!a.covered&&hot?outdoorHeat:0)-walk-travel(a.zone,nextZone)*0.5+descent+optionalNominalScore(day,a,st);
           score-=Math.max(0,arr-cursor)*0.03;
-          candidates.push({entry:{kind:'show',id:a.id,start:s},finish,zone:a.zone,score}); break;
+          candidates.push({entry:optionalEntry(day,a,s,openingJump),finish,zone:a.zone,score}); break;
         }
       }else{
         for(const [ws,we] of windowsFor(a,day)){
           const walk=travel(z,a.zone),st=Math.max(min(ws),cursor+walk+5),finish=st+a.duration;
-          if(finish>min(we)||finish+travel(a.zone,nextZone)+safety>deadline) continue;
+          if(finish>min(we)||finish+travel(a.zone,nextZone)+data.fillerSafetyMin>deadline) continue;
           const descent=(zoneVal[z]-zoneVal[a.zone])*50;
           const hot=st>=heat[0]&&st<heat[1],outdoorHeat=day===18?90:25,coveredHeat=day===18?70:20;
           let score=(a.zone===z?50:0)+(a.covered&&hot?coveredHeat:15)-(!a.covered&&hot?outdoorHeat:0)-walk-travel(a.zone,nextZone)*0.5+descent+8+optionalNominalScore(day,a,st);
@@ -252,7 +280,7 @@ function create(data){
     }
 
     const firstPriority=out.find(e=>A[String(e.id)]?.priority);
-    if(firstPriority&&isOpeningPhase(input,day)){
+    if(!out.some(e=>e.openingMove)&&firstPriority&&isOpeningPhase(input,day)){
       const a=A[String(firstPriority.id)];
       if(a.zone===data.strategy.deepZone&&min(firstPriority.start)<=min(data.strategy.deepStartGoodBefore)){
         firstPriority.openingMove=true;
