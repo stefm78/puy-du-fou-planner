@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#701c2b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Puy Planner">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./styles.css">
+<title>Puy du Fou — Planner famille 18–19 août 2026</title>
+</head>
+<body>
+<div class="app">
+<header class="top">
+  <div class="brandline">
+    <div><div class="brand">Puy du Fou · Planner famille</div><div class="mini" id="sourceLine">Chargement…</div></div>
+    <button class="linkbtn" onclick="openSettings()" aria-label="Réglages">⚙︎</button>
+  </div>
+  <div class="days">
+    <button class="daybtn active" id="day18" onclick="setDay(18)">MAR 18</button>
+    <button class="daybtn" id="day19" onclick="setDay(19)">MER 19 <span class="provisional">PROV.</span></button>
+  </div>
+</header>
+<div id="updateBar" class="updatebar"><div class="utext"><b>Nouvelle version disponible</b><br>Votre progression sera conservée.</div><button onclick="applyAppUpdate()">Mettre à jour</button></div>
+<div id="offlineBar" class="offlinebar">Mode hors ligne · le planner continue avec les données déjà chargées</div>
+<main class="main">
+  <section id="todayView" class="view active">
+    <div id="alerts"></div>
+    <div class="statusbar" id="statusbar"></div>
+    <div class="card nextcard" id="nextCard"></div>
+    <div class="sectionTitle">Suite de la journée</div>
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  <section id="showsView" class="view">
+    <div class="notice"><strong>Priorité O :</strong> pour les spectacles 1 à 7, le planner vise une arrivée 40 min avant. Cette marge inclut l'ouverture officielle des tribunes 30 min avant et 10 min de sécurité familiale.</div>
+    <div class="sectionTitle">Spectacles & activités</div>
+    <div class="list" id="showsList"></div>
+  </section>
+
+  <section id="mapView" class="view">
+    <div class="card">
+      <div class="eyebrow">Navigation volontairement simple</div>
+      <h2 style="margin:.3rem 0 .4rem">Carte papier + repères H/M/B</h2>
+      <p class="small">Le téléphone décide où aller et quand partir. Pour marcher, utilisez la carte papier officielle du parc : elle reste la référence la plus robuste.</p>
+    </div>
+    <div class="card">
+      <div class="grid3">
+        <div class="zonebox"><b>H</b><div class="small">Haut<br>1 · 2 · 3 · 9 · 18</div></div>
+        <div class="zonebox"><b>M</b><div class="small">Milieu<br>6 · 10 · 12 · 13 · 19</div></div>
+        <div class="zonebox"><b>B</b><div class="small">Bas<br>4 · 5 · 7 · 8 · 11</div></div>
+      </div>
+      <div class="notice" style="margin-top:12px"><strong>Principe :</strong> le moteur pénalise les traversées H↔B et privilégie les séquences dans une même zone.</div>
+    </div>
+  </section>
+
+  <section id="replanView" class="view">
+    <div class="card">
+      <div class="eyebrow">Incident ou envie de changer ?</div>
+      <h2 style="margin:.3rem 0 .4rem">Recalculer sans se perdre</h2>
+      <p class="small">Le moteur local traite les cas simples. S'il détecte un arbitrage risqué, il vous demande explicitement de revenir dans ChatGPT avec un état prêt à copier.</p>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn primary wide" onclick="recalculate(true)">↻ Recalculer maintenant</button>
+        <button class="btn outline wide" onclick="openAlternatives()">⇄ Changer la prochaine étape</button>
+        <button class="btn outline wide" onclick="openChatGPT()">🤖 Demander à ChatGPT</button>
+        <button class="btn outline wide" onclick="undoLast()">↶ Annuler</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Position</div>
+      <div class="settingsrow"><span>Je suis dans</span><select id="zoneSelect" onchange="manualZone(this.value)"><option value="auto">Automatique</option><option value="H">Haut</option><option value="M">Milieu</option><option value="B">Bas</option></select></div>
+      <div class="small">En automatique, la position est déduite de la dernière activité. Corrigez-la ici si vous vous êtes déplacés ailleurs.</div>
+    </div>
+    <div class="card"><div class="eyebrow">Diagnostic</div><div id="engineState" class="small"></div></div>
+  </section>
+</main>
+</div>
+
+<nav class="nav"><div class="navinner">
+  <button class="navbtn active" onclick="showView('todayView',this)"><span>▶</span>Aujourd'hui</button>
+  <button class="navbtn" onclick="showView('showsView',this)"><span>★</span>À voir</button>
+  <button class="navbtn" onclick="showView('mapView',this)"><span>⌖</span>Repères</button>
+  <button class="navbtn" onclick="showView('replanView',this)"><span>↻</span>Recalculer</button>
+</div></nav>
+
+<div id="modal" class="modal"><div id="sheet" class="sheet"></div></div>
+<script src="./data.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
