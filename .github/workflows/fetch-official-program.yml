@@ -15,84 +15,75 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Fetch official page and discover downloadable program
+      - name: Fetch official page, PDF, or discover official app endpoint
         shell: bash
         run: |
           set -u
-          mkdir -p official
+          rm -rf official/tmp official/app-endpoints.txt
+          mkdir -p official/tmp
           PAGE='https://www.puydufou.com/france/fr/programme-du-jour'
           UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36'
           : > official/fetch-report.txt
           echo "fetched_at=$(date -u +%FT%TZ)" >> official/fetch-report.txt
           echo "source=$PAGE" >> official/fetch-report.txt
-          code=$(curl -sS -L --compressed --connect-timeout 15 --max-time 45 \
-            -A "$UA" -H 'Accept-Language: fr-FR,fr;q=0.9,en;q=0.8' \
-            -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
-            -o official/page.html -w '%{http_code}' "$PAGE" || true)
+          code=$(curl -sS -L --compressed --connect-timeout 15 --max-time 45 -A "$UA" -H 'Accept-Language: fr-FR,fr;q=0.9,en;q=0.8' -o official/tmp/page.html -w '%{http_code}' "$PAGE" || true)
           echo "page_http=$code" >> official/fetch-report.txt
-          echo "page_bytes=$(wc -c < official/page.html 2>/dev/null || echo 0)" >> official/fetch-report.txt
+          echo "page_bytes=$(wc -c < official/tmp/page.html 2>/dev/null || echo 0)" >> official/fetch-report.txt
 
           python <<'PY'
           from pathlib import Path
           from urllib.parse import urljoin
           import re, html
-          p=Path('official/page.html')
-          text=p.read_text('utf-8','ignore') if p.exists() else ''
-          base='https://www.puydufou.com/france/fr/programme-du-jour'
-          vals=[]
+          p=Path('official/tmp/page.html'); text=p.read_text('utf-8','ignore') if p.exists() else ''
+          base='https://www.puydufou.com/france/fr/programme-du-jour'; vals=[]
           for pat in [r'''(?:href|src)=["']([^"']+)["']''', r'''https?://[^"'<>\\s]+''']:
               for m in re.finditer(pat,text,re.I):
-                  v=m.group(1) if m.lastindex else m.group(0)
-                  v=html.unescape(v).replace('\\/','/')
+                  v=m.group(1) if m.lastindex else m.group(0); v=html.unescape(v).replace('\\/','/')
                   u=urljoin(base,v)
-                  if any(k in u.lower() for k in ('pdf','programme','program','guide')):
-                      vals.append(u)
+                  if any(k in u.lower() for k in ('pdf','programme','program','guide')): vals.append(u)
           seen=[]
           for u in vals:
               if u not in seen: seen.append(u)
           Path('official/candidates.txt').write_text('\n'.join(seen),encoding='utf-8')
-          clues=[]
-          for line in text.splitlines():
-              low=line.lower()
-              if any(k in low for k in ('télécharger','telecharger','programme de demain','programme du jour','.pdf')):
-                  clues.append(line.strip())
-          Path('official/page-clues.txt').write_text('\n'.join(clues[:400]),encoding='utf-8')
           PY
-
           echo "candidate_count=$(grep -c . official/candidates.txt 2>/dev/null || true)" >> official/fetch-report.txt
-          cat official/candidates.txt >> official/fetch-report.txt || true
 
           sudo apt-get update -qq
-          sudo apt-get install -y -qq poppler-utils file >/dev/null
-          found=''
-          i=0
+          sudo apt-get install -y -qq poppler-utils file unzip >/dev/null
+          found=''; i=0
           while IFS= read -r u; do
-            [ -z "$u" ] && continue
-            i=$((i+1))
-            [ $i -gt 40 ] && break
-            out="official/candidate-$i.bin"
+            [ -z "$u" ] && continue; i=$((i+1)); [ $i -gt 40 ] && break
+            out="official/tmp/candidate-$i.bin"
             c=$(curl -sS -L --compressed --connect-timeout 12 --max-time 40 -A "$UA" -o "$out" -w '%{http_code}' "$u" || true)
-            typ=$(file -b --mime-type "$out" 2>/dev/null || true)
-            echo "candidate_$i=$c $typ $u" >> official/fetch-report.txt
-            if [ "$typ" = 'application/pdf' ]; then
-              mv "$out" official/program.pdf
-              found="$u"
-              break
-            fi
-            rm -f "$out"
+            typ=$(file -b --mime-type "$out" 2>/dev/null || true); echo "candidate_$i=$c $typ $u" >> official/fetch-report.txt
+            if [ "$typ" = 'application/pdf' ]; then mv "$out" official/program.pdf; found="$u"; break; fi
           done < official/candidates.txt
 
           if [ -n "$found" ]; then
             echo "pdf_url=$found" >> official/fetch-report.txt
             sha256sum official/program.pdf >> official/fetch-report.txt
             pdftotext -layout official/program.pdf official/program.txt || true
-            echo "pdf_text_bytes=$(wc -c < official/program.txt 2>/dev/null || echo 0)" >> official/fetch-report.txt
-            grep -Ei 'Signe du Triomphe|Vikings|Bal des Oiseaux|Secret de la Lance|Mousquetaire|Dernier Panache|Mime et l|Roi Arthur|Pérouse|Verdun|Renaissance|Premier Royaume|Grand Carillon|Grandes Eaux|Automates' official/program.txt > official/program-key-lines.txt || true
           else
             echo 'pdf_url=NOT_FOUND' >> official/fetch-report.txt
+            APK='https://d.apkpure.net/b/APK/fr.puydufou.android?version=latest'
+            acode=$(curl -sS -L --connect-timeout 20 --max-time 180 -A "$UA" -o official/tmp/app.apk -w '%{http_code}' "$APK" || true)
+            atyp=$(file -b --mime-type official/tmp/app.apk 2>/dev/null || true)
+            echo "apk_http=$acode apk_type=$atyp apk_bytes=$(wc -c < official/tmp/app.apk 2>/dev/null || echo 0)" >> official/fetch-report.txt
+            if [ "$atyp" = 'application/vnd.android.package-archive' ] || [ "$atyp" = 'application/zip' ]; then
+              unzip -q official/tmp/app.apk -d official/tmp/apk || true
+              find official/tmp/apk -type f \( -name '*.dex' -o -name '*.js' -o -name '*.bundle' -o -name '*.json' -o -name '*.xml' \) -size -30M -print0 2>/dev/null | \
+                xargs -0 -r strings 2>/dev/null | \
+                grep -Eio 'https?://[^"[:space:]<>]+' | sed 's/[),;]$//' | sort -u | \
+                grep -Ei 'puydufou|puy-du-fou|api|programme|program|schedule' | head -300 > official/app-endpoints.txt || true
+              find official/tmp/apk -type f \( -name '*.dex' -o -name '*.js' -o -name '*.bundle' \) -size -30M -print0 2>/dev/null | \
+                xargs -0 -r strings 2>/dev/null | grep -Ei 'programme|program|schedule|showtime|performance|affluence' | head -300 > official/app-program-strings.txt || true
+            fi
           fi
 
-          rm -f official/page.html official/candidate-*.bin
+          if [ -f official/program.txt ]; then
+            grep -Ei 'Signe du Triomphe|Vikings|Bal des Oiseaux|Secret de la Lance|Mousquetaire|Dernier Panache|Mime et l|Roi Arthur|Pérouse|Verdun|Renaissance|Premier Royaume|Grand Carillon|Grandes Eaux|Automates' official/program.txt > official/program-key-lines.txt || true
+          fi
+          rm -rf official/tmp
       - name: Commit fetch result
         shell: bash
         run: |
@@ -100,7 +91,7 @@ jobs:
           git config user.email 'actions@users.noreply.github.com'
           git add official
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'Capture official program fetch result [official-fetch-result]'
+          git commit -m 'Capture official program source probe [official-fetch-result]'
           git push
 
-# fetch trigger 2026-08-18
+# fetch trigger 2026-08-18 api probe
