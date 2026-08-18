@@ -92,7 +92,6 @@ jobs:
             echo 'pdf_url=NOT_FOUND' >> official/fetch-report.txt
           fi
 
-          # Keep diagnostics compact; never commit the full HTML page.
           rm -f official/page.html official/candidate-*.bin
       - name: Commit fetch result
         shell: bash
@@ -103,3 +102,5 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'Capture official program fetch result [official-fetch-result]'
           git push
+
+# fetch trigger 2026-08-18
