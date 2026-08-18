@@ -1,0 +1,6 @@
+fetched_at=2026-08-18T16:51:48Z
+source=https://www.puydufou.com/france/fr/programme-du-jour
+page_http=403
+page_bytes=919
+candidate_count=0
+pdf_url=NOT_FOUND
