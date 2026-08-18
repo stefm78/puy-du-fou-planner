@@ -69,7 +69,6 @@ jobs:
               s=s.replace(pwa,pwa+checks)
           q.write_text(s,encoding='utf-8')
 
-          # Remove the temporary source-probing experiment now that the official PDF has been supplied.
           Path('.github/workflows/fetch-official-program.yml').unlink(missing_ok=True)
           import shutil
           shutil.rmtree('official',ignore_errors=True)
@@ -96,3 +95,5 @@ jobs:
           git add -A
           git commit -m 'Promote 19 August official program [v1.4.4]'
           git push
+
+# trigger 2026-08-18T19:34+02:00
