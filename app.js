@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const VERSION='1.4.1';
+const VERSION='1.4.2';
 const STORE='puyPlannerV4';
 const SCRIPT_TIMEOUT_MS=4500;
 const status=document.getElementById('sourceLine');
@@ -134,7 +134,7 @@ async function boot(){
     }
 
     stopTicker();
-    setProgress('Prêt',100,'Planner opérationnel · 15 activités · H→M→B sur les deux jours.','done');
+    setProgress('Prêt',100,'Planner opérationnel · horloge système ou simulation isolée.','done');
     setTimeout(()=>document.getElementById('engineProgress')?.remove(),1400);
   }catch(err){console.error('Boot planner',err);showFailure(err)}
 }
