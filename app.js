@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const VERSION='1.4.2';
+const VERSION='1.4.3';
 const STORE='puyPlannerV4';
 const SCRIPT_TIMEOUT_MS=4500;
 const status=document.getElementById('sourceLine');
@@ -59,7 +59,7 @@ async function copyBootDiagnostic(){
   const p=ensureProgress();if(p)p.insertAdjacentHTML('beforeend','<div class="small" style="margin-top:6px"><b>Diagnostic copié.</b> Collez-le dans ChatGPT.</div>');
 }
 async function forceReload(){
-  setProgress('Nettoyage du cache…',20,'La progression de visite est conservée dans le stockage local.');
+  setProgress('Nettoyage du cache…',20,'La progression de visite et l’historique sont conservés dans le stockage local.');
   try{
     if('caches'in window){const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith('puy-planner-')).map(k=>caches.delete(k)))}
     if('serviceWorker'in navigator){const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.update().catch(()=>{})))}
@@ -112,7 +112,7 @@ function showFailure(err){
 async function boot(){
   try{
     startTicker();
-    setProgress('1/3 · Préparation',15,'Chargement des données et du plan nominal H→M→B.');
+    setProgress('1/3 · Préparation',15,'Chargement des données, du plan nominal et de l’historique.');
     if(!window.PUY_DATA)throw new Error('Données du programme indisponibles');
     seedInstantPlan();
     renderInstantFallback();
@@ -134,7 +134,7 @@ async function boot(){
     }
 
     stopTicker();
-    setProgress('Prêt',100,'Planner opérationnel · horloge système ou simulation isolée.','done');
+    setProgress('Prêt',100,'Planner opérationnel · historique + activité courante + futur.','done');
     setTimeout(()=>document.getElementById('engineProgress')?.remove(),1400);
   }catch(err){console.error('Boot planner',err);showFailure(err)}
 }
