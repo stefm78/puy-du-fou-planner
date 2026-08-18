@@ -4,15 +4,15 @@ const D=window.PUY_DATA, ENGINE=window.PuySolver.create(D);
 const ACT=Object.fromEntries(D.activities.map(a=>[String(a.id),a]));
 const STORE='puyPlannerV4';
 const DEFAULT={
-  version:6,engineVersion:D.engineVersion,day:18,viewDay:18,clockMode:'system',simulationDay:18,
-  completed:{18:[],19:[]},blocked:{18:{},19:{}},postponed18:[],
+  version:7,engineVersion:D.engineVersion,day:18,viewDay:18,clockMode:'system',simulationDay:18,
+  completed:{18:[],19:[]},completedLog:{18:[],19:[]},blocked:{18:{},19:{}},postponed18:[],
   manualZone:{18:'auto',19:'auto'},lastZone:{18:null,19:null},virtualTime:{18:'09:00',19:'09:00'},
   customPlan:{18:null,19:null},simulationPlan:{18:null,19:null},
   lunchDone:{18:false,19:false},solverMeta:null,simulationMeta:null,history:[]
 };
 const clone=x=>JSON.parse(JSON.stringify(x));
 const min=window.PuySolver.minutes,tm=window.PuySolver.time;
-let state=loadState(),swRegistration=null,toastTimer=null;
+let state=loadState(),swRegistration=null,toastTimer=null,focusCurrentRequested=true,focusTimer=null,scrollTick=false;
 
 function systemDateKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function systemVisitDay(){const k=systemDateKey();return k==='2026-08-18'?18:k==='2026-08-19'?19:null}
@@ -49,11 +49,20 @@ function zoneOf(e){return e.zone||activity(e.id)?.zone||'M'}
 function nameOf(e){return e.name||activity(e.id)?.name||String(e.id)}
 function endMin(e){return min(e.start)+durationOf(e)+exitBuffer(e)}
 
+function legacyCompletion(day,id,x){
+  const s=String(id),a=activity(s);
+  const plans=[x.customPlan?.[day],D.fallbackPlans?.[day]].filter(Array.isArray);
+  let e=null;
+  for(const p of plans){e=p.find(y=>String(y.id)===s);if(e)break}
+  return {id:s,day:Number(day),name:a?.name||e?.name||s,zone:a?.zone||e?.zone||'M',kind:e?.kind||'show',
+    scheduledStart:e?.start||null,completedAt:null,completedClock:null,priority:!!a?.priority,covered:!!a?.covered,legacy:true};
+}
 function loadState(){
   try{
     const x=JSON.parse(localStorage.getItem(STORE)||'null');if(!x)return clone(DEFAULT);
     const migrated={...clone(DEFAULT),...x,
       completed:{...clone(DEFAULT.completed),...(x.completed||{})},
+      completedLog:{...clone(DEFAULT.completedLog),...(x.completedLog||{})},
       blocked:{...clone(DEFAULT.blocked),...(x.blocked||{})},
       manualZone:{...clone(DEFAULT.manualZone),...(x.manualZone||{})},
       lastZone:{...clone(DEFAULT.lastZone),...(x.lastZone||{})},
@@ -63,9 +72,20 @@ function loadState(){
       simulationPlan:{...clone(DEFAULT.simulationPlan),...(x.simulationPlan||{})},
       history:x.history||[],postponed18:x.postponed18||x.postponed?.[18]||[]
     };
+    migrated.version=7;
     migrated.clockMode=x.clockMode==='simulation'?'simulation':'system';
     migrated.simulationDay=Number(x.simulationDay||x.day||18);
     migrated.viewDay=Number(x.viewDay||x.day||18);
+    for(const day of [18,19]){
+      migrated.completedLog[day]=Array.isArray(migrated.completedLog[day])?migrated.completedLog[day]:[];
+      for(const id of migrated.completed[day]||[]){
+        if(!migrated.completedLog[day].some(r=>String(r.id)===String(id)))migrated.completedLog[day].push(legacyCompletion(day,id,x));
+      }
+      if(migrated.lunchDone[day]&&!migrated.completedLog[day].some(r=>String(r.id)==='lunch')){
+        const p=(x.customPlan?.[day]||D.fallbackPlans?.[day]||[]).find(e=>e.id==='lunch');
+        migrated.completedLog[day].push({id:'lunch',day,name:'Déjeuner',zone:p?.zone||'M',kind:'lunch',scheduledStart:p?.start||null,completedAt:null,completedClock:null,priority:false,covered:false,legacy:true});
+      }
+    }
     if(x.engineVersion!==D.engineVersion){
       migrated.engineVersion=D.engineVersion;
       migrated.customPlan={18:null,19:null};migrated.solverMeta=null;
@@ -76,7 +96,24 @@ function loadState(){
 }
 function save(){try{localStorage.setItem(STORE,JSON.stringify(state));return true}catch(e){console.warn(e);toast('Sauvegarde locale indisponible');return false}}
 function snapshot(label){const clean=clone({...state,history:[]});state.history.push({label,at:Date.now(),state:clean});if(state.history.length>15)state.history.shift()}
-function undoLast(){if(!isOperationalView())return toast('Annulation disponible uniquement en mode système sur le jour actif');if(!state.history.length)return toast('Rien à annuler');const h=state.history.pop(),hist=state.history;state=h.state;state.history=hist;save();recalculate(false);toast('Action annulée')}
+function restoreSnapshot(s,hist){
+  state={...clone(DEFAULT),...s,
+    completed:{...clone(DEFAULT.completed),...(s.completed||{})},
+    completedLog:{...clone(DEFAULT.completedLog),...(s.completedLog||{})},
+    blocked:{...clone(DEFAULT.blocked),...(s.blocked||{})},
+    manualZone:{...clone(DEFAULT.manualZone),...(s.manualZone||{})},
+    lastZone:{...clone(DEFAULT.lastZone),...(s.lastZone||{})},
+    virtualTime:{...clone(DEFAULT.virtualTime),...(s.virtualTime||{})},
+    lunchDone:{...clone(DEFAULT.lunchDone),...(s.lunchDone||{})},
+    customPlan:{...clone(DEFAULT.customPlan),...(s.customPlan||{})},
+    simulationPlan:{18:null,19:null},simulationMeta:null,history:hist,version:7
+  };
+}
+function undoLast(){
+  if(!isOperationalView())return toast('Annulation disponible uniquement en mode système sur le jour actif');
+  if(!state.history.length)return toast('Rien à annuler');
+  const h=state.history.pop(),hist=state.history;restoreSnapshot(h.state,hist);requestFocusCurrent();save();recalculate(false);toast('Action annulée');
+}
 
 function isDone(day,id){const s=String(id);return state.completed[day].includes(s)||(day===19&&state.completed[18].includes(s))}
 function isPostponed(day,id){return day===18&&state.postponed18.includes(String(id))}
@@ -113,6 +150,7 @@ function currentMeta(){return isSimulation()?(state.simulationMeta||state.solver
 function recalculate(userInitiated=false,forceFirst=null){
   if(userInitiated&&!isSimulation()&&!isOperationalView())return toast('Passez sur le jour système actif ou utilisez le mode Simulation');
   if(userInitiated&&!isSimulation())snapshot('Recalcul global');
+  if(userInitiated)requestFocusCurrent();
   const sol=ENGINE.solve(solverInput(),forceFirst?{forceFirst}:{});
   if(isSimulation()){
     state.simulationPlan={18:sol.plans[18]||null,19:sol.plans[19]||null};
@@ -129,6 +167,30 @@ function recalculate(userInitiated=false,forceFirst=null){
   return sol;
 }
 
+function findPlannedEntry(day,id){
+  const s=String(id);
+  return realPlan(day).find(e=>String(e.id)===s)||basePlan(day).find(e=>String(e.id)===s)||null;
+}
+function completionRecord(day,id){
+  const s=String(id),e=findPlannedEntry(day,s),a=activity(s);
+  return {id:s,day:Number(day),name:a?.name||e?.name||(s==='lunch'?'Déjeuner':s),zone:a?.zone||e?.zone||currentZone(day),
+    kind:e?.kind||(s==='lunch'?'lunch':'show'),scheduledStart:e?.start||null,completedAt:Date.now(),completedClock:tm(systemNowMin()),
+    priority:!!a?.priority,covered:!!a?.covered,legacy:false};
+}
+function addCompletionLog(day,id){
+  const s=String(id);state.completedLog[day]=state.completedLog[day]||[];
+  state.completedLog[day]=state.completedLog[day].filter(r=>String(r.id)!==s);
+  state.completedLog[day].push(completionRecord(day,s));
+}
+function removeCompletionLog(day,id){const s=String(id);state.completedLog[day]=(state.completedLog[day]||[]).filter(r=>String(r.id)!==s)}
+function historyRows(day){
+  return [...(state.completedLog?.[day]||[])].sort((a,b)=>{
+    const am=a.scheduledStart?min(a.scheduledStart):(a.completedClock?min(a.completedClock):9999);
+    const bm=b.scheduledStart?min(b.scheduledStart):(b.completedClock?min(b.completedClock):9999);
+    return am-bm||(a.completedAt||0)-(b.completedAt||0);
+  });
+}
+
 function entryStatus(e,day=displayDay(),n=nowMin(day)){
   if(e.kind==='lunch'&&state.lunchDone[day])return'done';
   if(e.kind!=='fixed'&&e.kind!=='lunch'&&isDone(day,e.id))return'done';
@@ -139,31 +201,84 @@ function riskAnalysis(){const m=currentMeta();return{missing:m.missing||0,comple
 function recommendedLeave(e,z,day=displayDay()){if(e.openingMove)return min(D.opening[day]);return min(e.start)-arrivalBuffer(e)-travel(z,zoneOf(e))}
 function requireOperational(){if(isOperationalView())return true;toast(isSimulation()?'Simulation en lecture seule · le plan réel est protégé':'Cette journée est en aperçu · aucune action réelle');return false}
 
+function requestFocusCurrent(){focusCurrentRequested=true}
+function ensureJourneyUi(){
+  const box=document.getElementById('nextCard');if(!box)return;
+  let wrap=document.getElementById('historyWrap');
+  if(!wrap){
+    wrap=document.createElement('div');wrap.id='historyWrap';wrap.className='hidden';
+    wrap.innerHTML='<div class="sectionTitle">Historique de la journée</div><div id="historyTimeline" class="timeline"></div>';
+    box.before(wrap);
+  }
+  let fab=document.getElementById('nowFab');
+  if(!fab){
+    fab=document.createElement('button');fab.id='nowFab';fab.type='button';fab.className='btn primary hidden';
+    fab.textContent='◎ Maintenant';fab.setAttribute('aria-label','Revenir à l’activité en cours');
+    fab.style.cssText='position:fixed;right:14px;bottom:92px;z-index:45;box-shadow:0 8px 24px rgba(0,0,0,.22);padding:10px 13px;border-radius:999px';
+    fab.onclick=()=>scrollToCurrent(true);document.body.appendChild(fab);
+    window.addEventListener('scroll',()=>{if(scrollTick)return;scrollTick=true;requestAnimationFrame(()=>{scrollTick=false;updateNowFab()})},{passive:true});
+  }
+}
+function renderHistory(){
+  ensureJourneyUi();const d=displayDay(),wrap=document.getElementById('historyWrap'),tl=document.getElementById('historyTimeline');if(!wrap||!tl)return;
+  const rows=historyRows(d);wrap.classList.toggle('hidden',rows.length===0);
+  tl.innerHTML=rows.map(r=>{
+    const a=activity(r.id),priority=r.priority||a?.priority,shownTime=r.completedClock||r.scheduledStart||'✓';
+    const sub=[r.completedClock?`Fait à ${r.completedClock}`:'Déjà marqué fait avant activation de l’historique',r.scheduledStart?`séance ${r.scheduledStart}`:null,labelZone(r.zone),priority?'O':null].filter(Boolean).join(' · ');
+    const prefix=Number.isFinite(Number(r.id))?`${r.id} · `:'';
+    return `<div class="item historydone ${priority?'priority':''}" style="background:#f8f5ee;border-left:${priority?'4px solid var(--brand)':'4px solid var(--ok)'};opacity:1"><div class="time">${shownTime}</div><div><div class="iname">✓ ${prefix}${r.name}</div><div class="isub">${sub}</div></div><div class="dot" style="background:var(--ok)"></div></div>`;
+  }).join('');
+  updateNowFab();
+}
+function scrollToCurrent(smooth=false){
+  ensureJourneyUi();const box=document.getElementById('nextCard');if(!box)return;
+  clearTimeout(focusTimer);focusCurrentRequested=false;
+  const top=document.querySelector('.top'),offset=(top?.offsetHeight||0)+10;
+  const y=Math.max(0,window.scrollY+box.getBoundingClientRect().top-offset);
+  window.scrollTo({top:y,behavior:smooth?'smooth':'auto'});
+  setTimeout(updateNowFab,smooth?350:50);
+}
+function updateNowFab(){
+  const fab=document.getElementById('nowFab'),box=document.getElementById('nextCard'),view=document.getElementById('todayView');if(!fab||!box||!view)return;
+  const hasHistory=historyRows(displayDay()).length>0;
+  if(!view.classList.contains('active')||!hasHistory){fab.classList.add('hidden');return}
+  const r=box.getBoundingClientRect(),header=document.querySelector('.top')?.getBoundingClientRect(),top=(header?.bottom||0)+4;
+  const visible=r.bottom>top&&r.top<window.innerHeight-110;
+  fab.classList.toggle('hidden',visible);
+}
+function scheduleCurrentFocus(){
+  if(!focusCurrentRequested||!document.getElementById('todayView')?.classList.contains('active'))return;
+  clearTimeout(focusTimer);focusTimer=setTimeout(()=>scrollToCurrent(false),80);
+}
+
 function markDone(id){
   if(!requireOperational())return;snapshot('Fait');const d=effectiveDay(),s=String(id);
-  if(s==='lunch')state.lunchDone[d]=true;
-  else if(!['dinner','noces'].includes(s)&&!state.completed[d].includes(s)){state.completed[d].push(s);if(activity(id))state.lastZone[d]=activity(id).zone}
-  save();recalculate(false);toast('Fait · les deux jours ont été réoptimisés');
+  if(s==='lunch'){state.lunchDone[d]=true;addCompletionLog(d,'lunch')}
+  else if(!['dinner','noces'].includes(s)&&!state.completed[d].includes(s)){addCompletionLog(d,s);state.completed[d].push(s);if(activity(id))state.lastZone[d]=activity(id).zone}
+  requestFocusCurrent();save();recalculate(false);toast('Fait · ajouté à l’historique · suite réoptimisée');
 }
 function toggleDone(id){
-  if(!requireOperational())return;snapshot('Basculer fait');const d=effectiveDay(),s=String(id),i=state.completed[d].indexOf(s);
-  if(i>=0)state.completed[d].splice(i,1);else{state.completed[d].push(s);if(activity(id))state.lastZone[d]=activity(id).zone}
-  save();recalculate(false);
+  if(!requireOperational())return;const d=effectiveDay(),s=String(id);
+  if(d===19&&state.completed[18].includes(s))return toast('Cette activité a déjà été faite le 18 août');
+  snapshot('Basculer fait');const i=state.completed[d].indexOf(s);
+  if(i>=0){state.completed[d].splice(i,1);removeCompletionLog(d,s)}
+  else{addCompletionLog(d,s);state.completed[d].push(s);if(activity(id))state.lastZone[d]=activity(id).zone}
+  requestFocusCurrent();save();recalculate(false);
 }
 function blockCurrent(id,start,why){
   if(!requireOperational())return;snapshot(why);const d=effectiveDay(),k=String(id);state.blocked[d][k]=state.blocked[d][k]||[];
   if(!state.blocked[d][k].includes(start))state.blocked[d][k].push(start);
-  save();const sol=recalculate(false);toast(why==='full'?'Séance marquée complète · plan recalculé':'Séance abandonnée · plan recalculé');
+  requestFocusCurrent();save();const sol=recalculate(false);toast(why==='full'?'Séance marquée complète · plan recalculé':'Séance abandonnée · plan recalculé');
   if(sol&&!sol.diagnostics.complete)setTimeout(openChatGPT,250);
 }
 function postpone(id){
   if(!requireOperational()||effectiveDay()!==18)return; snapshot('Report 19');const k=String(id);
-  if(!state.postponed18.includes(k))state.postponed18.push(k);save();recalculate(false);toast('Reporté au 19 et planning global recalculé');
+  if(!state.postponed18.includes(k))state.postponed18.push(k);requestFocusCurrent();save();recalculate(false);toast('Reporté au 19 et planning global recalculé');
 }
 function manualZone(v){
-  if(!requireOperational())return;const d=effectiveDay();snapshot('Position');state.manualZone[d]=v;if(v!=='auto')state.lastZone[d]=v;save();recalculate(false);
+  if(!requireOperational())return;const d=effectiveDay();snapshot('Position');state.manualZone[d]=v;if(v!=='auto')state.lastZone[d]=v;requestFocusCurrent();save();recalculate(false);
 }
-function setDay(d){state.viewDay=Number(d);save();render()}
+function setDay(d){state.viewDay=Number(d);requestFocusCurrent();save();render()}
 
 function renderStatus(){
   const d=displayDay(),n=nowMin(d),z=currentZone(d),done=[...new Set([...state.completed[18],...(d===19?state.completed[19]:[])])].length,r=riskAnalysis();
@@ -183,7 +298,7 @@ function renderAlerts(){
 }
 function renderNext(){
   const d=displayDay(),e=nextEntry(d),box=document.getElementById('nextCard'),n=nowMin(d),z=currentZone(d);
-  if(!e){box.innerHTML='<div class="eyebrow">Terminé</div><div class="nexttitle">Plus d’étape planifiée</div>';return}
+  if(!e){box.innerHTML='<div class="eyebrow">Journée</div><div class="nexttitle">Plus d’étape planifiée</div><div class="small">Remontez pour revoir l’historique de la journée.</div>';return}
   const a=activity(e.id),ez=zoneOf(e),walk=travel(z,ez),buf=arrivalBuffer(e),leave=recommendedLeave(e,z,d),delta=leave-n,cls=delta<0?'danger':delta<=15?'wait':'safe';
   let msg;
   if(e.openingMove&&n<min(D.opening[d]))msg=`À l’ouverture ${D.opening[d]}, partez vers le ${labelZone(ez)}`;
@@ -207,9 +322,10 @@ function renderNext(){
 function renderTimeline(){
   const d=displayDay(),n=nowMin(d);let h='';
   for(const e of currentPlan(d)){
-    const st=entryStatus(e,d,n),a=activity(e.id),classes=['item',a?.priority?'priority':'',e.kind==='fixed'?'fixed':'',st==='current'?'current':'',st==='done'||st==='past'?'done':''].join(' '),
-      sub=[labelZone(zoneOf(e)),a?.priority?'O':null,a?.covered?'couvert':null,e.openingMove?'contre-courant':null,e.note||null].filter(Boolean).join(' · ');
-    h+=`<div class="${classes}"><div class="time">${e.start}</div><div><div class="iname">${a?`${a.id} · `:''}${nameOf(e)}</div><div class="isub">${sub}</div></div><div class="dot"></div></div>`;
+    const st=entryStatus(e,d,n);if(st==='done')continue;
+    const a=activity(e.id),classes=['item',a?.priority?'priority':'',e.kind==='fixed'?'fixed':'',st==='current'?'current':'',st==='past'?'missed':''].join(' '),
+      sub=[labelZone(zoneOf(e)),a?.priority?'O':null,a?.covered?'couvert':null,e.openingMove?'contre-courant':null,st==='past'?'passé · non confirmé':null,e.note||null].filter(Boolean).join(' · ');
+    h+=`<div class="${classes}" ${st==='past'?'style="opacity:.62;border-style:dashed"':''}><div class="time">${e.start}</div><div><div class="iname">${a?`${a.id} · `:''}${nameOf(e)}</div><div class="isub">${sub}</div></div><div class="dot"></div></div>`;
   }
   document.getElementById('timeline').innerHTML=h||'<div class="notice">Aucune étape future.</div>';
 }
@@ -229,17 +345,21 @@ function renderEngine(){
   const m=currentMeta(),sk=m.skeleton||{18:[],19:[]},d=displayDay(),zoneSelect=document.getElementById('zoneSelect');
   zoneSelect.value=state.manualZone[effectiveDay()]||'auto';zoneSelect.disabled=!isOperationalView();
   const fmt=x=>(sk[x]||[]).map(y=>`${y.id} ${activity(y.id)?.name} ${y.start}`).join(' → ')||'aucun O restant';
-  document.getElementById('engineState').innerHTML=`Horloge : <b>${clockLabel()}</b><br>Jour affiché : <b>${d}/08</b> · position calculée : <b>${currentZone(d)}</b><br>Moteur : <b>${isSimulation()?'bac à sable de simulation':'plan réel'}</b>, stratégie <b>${D.strategy.label}</b>.<br>Le simple passage du temps ou le changement d’onglet ne déclenche plus de recalcul silencieux.<br><br><b>18 :</b> ${fmt(18)}<br><b>19 :</b> ${fmt(19)}<br><b>Marge minimale entre grands spectacles :</b> ${m.minSlack==null?'—':m.minSlack+' min'}`;
+  document.getElementById('engineState').innerHTML=`Horloge : <b>${clockLabel()}</b><br>Jour affiché : <b>${d}/08</b> · position calculée : <b>${currentZone(d)}</b><br>Moteur : <b>${isSimulation()?'bac à sable de simulation':'plan réel'}</b>, stratégie <b>${D.strategy.label}</b>.<br>Le simple passage du temps ou le changement d’onglet ne déclenche plus de recalcul silencieux.<br>Historique : <b>${historyRows(d).length} validation${historyRows(d).length>1?'s':''}</b> immuable${historyRows(d).length>1?'s':''} hors action explicite/annulation.<br><br><b>18 :</b> ${fmt(18)}<br><b>19 :</b> ${fmt(19)}<br><b>Marge minimale entre grands spectacles :</b> ${m.minSlack==null?'—':m.minSlack+' min'}`;
 }
 function render(){
   const d=displayDay();
-  renderAlerts();renderStatus();renderNext();renderTimeline();renderShows();renderEngine();
+  ensureJourneyUi();renderAlerts();renderStatus();renderHistory();renderNext();renderTimeline();renderShows();renderEngine();
   document.getElementById('day18').classList.toggle('active',d===18);document.getElementById('day19').classList.toggle('active',d===19);
   const mode=isSimulation()?`simulation ${state.simulationDay}/08 ${tm(nowMin(state.simulationDay))}`:(systemVisitDay()?`système ${systemVisitDay()}/08 ${tm(systemNowMin())}`:'système hors visite');
   document.getElementById('sourceLine').textContent=`${d===18?'18 officiel · édition '+D.sourceEdit:'19 provisoire'} · v${D.appVersion} · ${mode}`;
+  scheduleCurrentFocus();setTimeout(updateNowFab,100);
 }
 
-function showView(id,btn){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));btn?.classList.add('active');window.scrollTo({top:0,behavior:'smooth'})}
+function showView(id,btn){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));btn?.classList.add('active');
+  if(id==='todayView'){requestFocusCurrent();setTimeout(()=>scrollToCurrent(true),30)}else{document.getElementById('nowFab')?.classList.add('hidden');window.scrollTo({top:0,behavior:'smooth'})}
+}
 function openModal(html){document.getElementById('sheet').innerHTML=html;document.getElementById('modal').classList.add('open')}
 function closeModal(){document.getElementById('modal').classList.remove('open')}
 document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
@@ -248,13 +368,14 @@ function openAlternatives(){
   const d=effectiveDay(),alts=ENGINE.alternatives(solverInput(),d,6);
   openModal(`<h2>Changer le prochain grand spectacle</h2><p>${isSimulation()?'<b>Simulation :</b> aucune proposition ne modifiera le planning réel.':'Chaque proposition est recalculée sur les deux jours.'}</p>${alts.map(c=>{const a=activity(c.id),ok=c.missing===0;return`<button class="option" onclick="chooseAlternative('${a.id}','${c.start}')"><b>${a.id} · ${a.name} — ${c.start}</b><small>${labelZone(a.zone)} · ${a.covered?'couvert':'extérieur'} · ${ok?'✓ tous les O restent couverts':`⚠ ${c.missing} O non garanti`}</small></button>`}).join('')||'<div class="notice">Pas d’alternative robuste.</div>'}<button class="btn outline" style="width:100%;margin-top:8px" onclick="closeModal()">Fermer</button>`);
 }
-function chooseAlternative(id,start){closeModal();recalculate(true,{day:effectiveDay(),id:Number(id),start})}
+function chooseAlternative(id,start){closeModal();requestFocusCurrent();recalculate(true,{day:effectiveDay(),id:Number(id),start})}
 function chatState(){
   const d=effectiveDay(),n=nowMin(d),m=currentMeta(),remaining=D.activities.filter(a=>!isDone(d,a.id)&&!isPostponed(d,a.id));
   const schedules=remaining.map(a=>`${a.id} ${a.name} | ${a.zone} | ${a.covered?'couvert':'extérieur'} | ${a.priority?'O':'optionnel'} | ${a.sessions?a.sessions.join('/'):(a.continuous||[]).map(w=>w.join('-')).join('/')}`).join('\n');
   const blocked=[18,19].flatMap(day=>Object.entries(state.blocked[day]||{}).flatMap(([id,ss])=>ss.map(s=>`${day}:${id}@${s}`))).join(', ')||'aucune';
   const plans=[18,19].map(day=>`${day}/08: ${currentPlan(day).map(e=>`${e.start} ${activity(e.id)?.id?activity(e.id).id+' ':''}${nameOf(e)}`).join(' | ')}`).join('\n');
-  return `PUY_STATE_V3\nMode horloge: ${clockLabel()}\nDate active solveur: ${d}/08/2026\nHeure: ${tm(n)}\nPosition: ${currentZone(d)} (${labelZone(currentZone(d))})\nDéjà faits 18: ${state.completed[18].join(', ')||'aucun'}\nDéjà faits 19: ${state.completed[19].join(', ')||'aucun'}\nSéances bloquées/pleines: ${blocked}\nReportés au 19: ${state.postponed18.join(', ')||'aucun'}\nSolveur: ${m.complete?'tous les O encore couverts':`${m.missing||'?'} O non garanti`}\nStratégie: ${D.strategy.label}\nContraintes: 18/08 Café de la Madelon 20:00; Noces de Feu 22:00.\n\nPlanning actuel:\n${plans}\n\nHoraires restants:\n${schedules}\n\nDemande: recalcule la meilleure stratégie à partir de cet état en préservant tous les O si possible.`;
+  const logs=[18,19].map(day=>`${day}/08: ${historyRows(day).map(r=>`${r.completedClock||'?'} ${r.id} ${r.name}`).join(' | ')||'aucun'}`).join('\n');
+  return `PUY_STATE_V3\nMode horloge: ${clockLabel()}\nDate active solveur: ${d}/08/2026\nHeure: ${tm(n)}\nPosition: ${currentZone(d)} (${labelZone(currentZone(d))})\nDéjà faits 18: ${state.completed[18].join(', ')||'aucun'}\nDéjà faits 19: ${state.completed[19].join(', ')||'aucun'}\nHistorique validé:\n${logs}\nSéances bloquées/pleines: ${blocked}\nReportés au 19: ${state.postponed18.join(', ')||'aucun'}\nSolveur: ${m.complete?'tous les O encore couverts':`${m.missing||'?'} O non garanti`}\nStratégie: ${D.strategy.label}\nContraintes: 18/08 Café de la Madelon 20:00; Noces de Feu 22:00.\n\nPlanning actuel:\n${plans}\n\nHoraires restants:\n${schedules}\n\nDemande: recalcule la meilleure stratégie à partir de cet état en préservant tous les O si possible.`;
 }
 async function copyText(t){try{await navigator.clipboard.writeText(t);toast('État copié · collez-le dans ChatGPT')}catch(e){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast('État copié')}}
 function openChatGPT(){const txt=chatState().replace(/</g,'&lt;');openModal(`<h2>🤖 ChatGPT est nécessaire pour arbitrer</h2><p>Copiez cet état dans notre conversation : vous n'avez rien à réexpliquer.</p><textarea id="chatState" readonly>${txt}</textarea><div class="actions" style="margin-top:10px"><button class="btn primary wide" onclick="copyText(document.getElementById('chatState').value)">Copier l'état</button><button class="btn outline wide" onclick="closeModal()">Fermer</button></div>`)}
@@ -266,6 +387,7 @@ function openSettings(){
     <div class="settingsrow"><span>Jour simulé</span><select ${sim?'':'disabled'} onchange="setSimulationDay(this.value)"><option value="18" ${Number(state.simulationDay)===18?'selected':''}>Mardi 18</option><option value="19" ${Number(state.simulationDay)===19?'selected':''}>Mercredi 19</option></select></div>
     <div class="settingsrow"><span>Heure simulée</span><input type="time" value="${state.virtualTime[state.simulationDay]||D.opening[state.simulationDay]}" ${sim?'':'disabled'} onchange="setVirtualTime(this.value)"></div>
     <div class="small">${sim?'La simulation est isolée : elle ne modifie ni le planning réel, ni les activités faites/bloquées.':'Activez Simulation pour tester une autre date ou heure.'}</div>
+    <div class="settingsrow"><span>Historique réel</span><span class="small">${historyRows(18).length+historyRows(19).length} validation${historyRows(18).length+historyRows(19).length>1?'s':''} conservée${historyRows(18).length+historyRows(19).length>1?'s':''}</span></div>
     <div class="settingsrow"><span>Source programme</span><span class="small">18 officiel · ${D.sourceEdit}</span></div>
     <div class="settingsrow"><span>Version</span><span class="small">v${D.appVersion}</span></div>
     <div class="settingsrow"><span>Mise à jour</span><button class="btn outline" onclick="checkForAppUpdate(true)">Vérifier</button></div>
@@ -274,6 +396,7 @@ function openSettings(){
 }
 function setClockMode(mode){
   if(!['system','simulation'].includes(mode))return;
+  requestFocusCurrent();
   if(mode==='simulation'){
     const sd=systemVisitDay()||displayDay()||18;
     state.clockMode='simulation';state.simulationDay=sd;state.viewDay=sd;
@@ -289,14 +412,14 @@ function setClockMode(mode){
 }
 function setSimulationDay(v){
   if(!isSimulation())return;const d=Number(v);if(![18,19].includes(d))return;
-  state.simulationDay=d;state.viewDay=d;state.simulationPlan={18:null,19:null};state.simulationMeta=null;save();closeModal();recalculate(false);
+  state.simulationDay=d;state.viewDay=d;state.simulationPlan={18:null,19:null};state.simulationMeta=null;requestFocusCurrent();save();closeModal();recalculate(false);
 }
 function setVirtualTime(v){
-  if(!isSimulation())return;const d=Number(state.simulationDay);state.virtualTime[d]=v;state.simulationPlan={18:null,19:null};state.simulationMeta=null;save();closeModal();recalculate(false);
+  if(!isSimulation())return;const d=Number(state.simulationDay);state.virtualTime[d]=v;state.simulationPlan={18:null,19:null};state.simulationMeta=null;requestFocusCurrent();save();closeModal();recalculate(false);
 }
 function resetDay(){
-  if(!requireOperational())return;snapshot('Reset');const d=effectiveDay();state.completed[d]=[];state.blocked[d]={};state.customPlan[d]=null;state.lunchDone[d]=false;state.manualZone[d]='auto';state.lastZone[d]=null;
-  if(d===18){state.postponed18=[];state.customPlan[19]=null}state.solverMeta=null;save();closeModal();recalculate(false);toast('Journée réinitialisée');
+  if(!requireOperational())return;snapshot('Reset');const d=effectiveDay();state.completed[d]=[];state.completedLog[d]=[];state.blocked[d]={};state.customPlan[d]=null;state.lunchDone[d]=false;state.manualZone[d]='auto';state.lastZone[d]=null;
+  if(d===18){state.postponed18=[];state.customPlan[19]=null}state.solverMeta=null;requestFocusCurrent();save();closeModal();recalculate(false);toast('Journée et historique réinitialisés');
 }
 function toast(msg){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t)}t.textContent=msg;t.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.style.display='none',2600)}
 
@@ -309,12 +432,12 @@ async function registerPwa(){
 async function checkForAppUpdate(userInitiated=false){if(!swRegistration){if(userInitiated)toast('Vérification disponible après le premier chargement HTTPS');return}try{await swRegistration.update();if(swRegistration.waiting)showUpdateBar();else if(userInitiated)toast('Vous avez déjà la dernière version')}catch(e){if(userInitiated)toast(navigator.onLine?'Vérification impossible maintenant':'Hors ligne · vérification impossible')}}
 function applyAppUpdate(){if(swRegistration?.waiting)swRegistration.waiting.postMessage({type:'SKIP_WAITING'});else location.reload()}
 
-Object.assign(window,{setDay,showView,openSettings,recalculate,openAlternatives,openChatGPT,undoLast,manualZone,markDone,toggleDone,blockCurrent,postpone,chooseAlternative,closeModal,copyText,setClockMode,setSimulationDay,setVirtualTime,resetDay,checkForAppUpdate,applyAppUpdate});
+Object.assign(window,{setDay,showView,openSettings,recalculate,openAlternatives,openChatGPT,undoLast,manualZone,markDone,toggleDone,blockCurrent,postpone,chooseAlternative,closeModal,copyText,setClockMode,setSimulationDay,setVirtualTime,resetDay,checkForAppUpdate,applyAppUpdate,scrollToCurrent});
 (function bootClock(){
   const sd=systemVisitDay();
   if(state.clockMode==='system'&&sd){state.day=sd;if(![18,19].includes(Number(state.viewDay)))state.viewDay=sd}
   if(state.clockMode==='simulation'){state.viewDay=Number(state.simulationDay||18);state.simulationPlan={18:null,19:null};state.simulationMeta=null}
-  save();
+  requestFocusCurrent();save();
   if(isSimulation())recalculate(false);
   else if(sd&&!state.customPlan[sd])recalculate(false);
   else render();
@@ -324,11 +447,11 @@ setInterval(()=>{
   if(state.clockMode!=='system')return;
   const sd=systemVisitDay();
   if(sd&&sd!==lastSystemDay){
-    lastSystemDay=sd;state.day=sd;state.viewDay=sd;save();
+    lastSystemDay=sd;state.day=sd;state.viewDay=sd;requestFocusCurrent();save();
     if(!state.customPlan[sd])recalculate(false);else render();
     return;
   }
-  renderStatus();renderNext();renderAlerts();
+  renderStatus();renderNext();renderAlerts();updateNowFab();
 },30000);
 registerPwa();
 })();
