@@ -17,6 +17,7 @@ jobs:
         run: |
           node --check app.js
           node --check app-core.js
+          node --check official-source.js
           node --check data.js
           node --check solver.js
           node --check sw.js
@@ -28,9 +29,12 @@ jobs:
           require('./data.js');
           const d = window.PUY_DATA;
           const assert = (x,m) => { if(!x) throw new Error(m); };
-          assert(d.sourceEdit === '17/08/2026 19:48','wrong source edition');
-          assert(d.appVersion === '1.4.3','wrong app version');
-          assert(d.engineVersion === 4,'history-only release must not invalidate solver plans');
+          assert(d.sourceEdit === '17/08/2026 19:48','wrong legacy 18 source edition');
+          assert(d.sourceEdits?.[18] === '17/08/2026 19:48','wrong 18 source edition');
+          assert(d.sourceEdits?.[19] === '18/08/2026 15:52','wrong 19 source edition');
+          assert(d.sourceHashes?.[19] === 'f5c5d8d5d7941440e42ad4ffa1aa67a0209a0bb795477febe214f887cb7bdb54','wrong 19 PDF hash');
+          assert(d.appVersion === '1.4.4','wrong app version');
+          assert(d.engineVersion === 4,'official-source release must not invalidate unchanged solver plans');
           assert(d.activities.length === 15,'unexpected activity count');
           for (let i=1;i<=7;i++) assert(d.activities.find(a=>a.id===i)?.priority === true,`priority O missing for ${i}`);
           assert(!('homeDay' in d),'legacy hard homeDay pre-assignment must stay removed');
@@ -87,17 +91,24 @@ jobs:
           assert(s.includes('state.completedLog[d]=[]'),'day reset must clear its journey history explicitly');
           console.log('Journey history invariants OK');
           NODE
+      - name: Official 19 source UI
+        run: |
+          grep -q 'sourceEdits' official-source.js
+          grep -q '19 officiel' official-source.js
+          ! grep -q 'PROV.' index.html
+          grep -q './official-source.js' index.html
+          grep -q './official-source.js' sw.js
       - name: Mobile fail-fast boot
         run: |
-          grep -q "VERSION='1.4.3'" app.js
+          grep -q "VERSION='1.4.4'" app.js
           grep -q "SCRIPT_TIMEOUT_MS=4500" app.js
           grep -q "seedInstantPlan" app.js
           grep -q "renderInstantFallback" app.js
           grep -q "PUY_BOOT_DIAG_V1" app.js
           grep -q "Recharger avec force" app.js
           grep -Fq "bootState?.solverMeta?.fallback" app.js
-          grep -q "historique + activité courante + futur" app.js
-          grep -q "puy-planner-v1.4.3" sw.js
+          grep -q "programmes officiels 18 + 19" app.js
+          grep -q "puy-planner-v1.4.4" sw.js
           node <<'NODE'
           const fs=require('fs');
           const s=fs.readFileSync('app-core.js','utf8');
@@ -114,6 +125,7 @@ jobs:
           test -f styles.css
           test -f app.js
           test -f app-core.js
+          test -f official-source.js
           test -f data.js
           test -f solver.js
           grep -q 'manifest.webmanifest' index.html
