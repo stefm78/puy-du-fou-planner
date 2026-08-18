@@ -29,8 +29,8 @@ jobs:
           const d = window.PUY_DATA;
           const assert = (x,m) => { if(!x) throw new Error(m); };
           assert(d.sourceEdit === '17/08/2026 19:48','wrong source edition');
-          assert(d.appVersion === '1.4.1','wrong app version');
-          assert(d.engineVersion === 4,'wrong engine version');
+          assert(d.appVersion === '1.4.2','wrong app version');
+          assert(d.engineVersion === 4,'clock-only release must not invalidate solver plans');
           assert(d.activities.length === 15,'unexpected activity count');
           for (let i=1;i<=7;i++) assert(d.activities.find(a=>a.id===i)?.priority === true,`priority O missing for ${i}`);
           assert(!('homeDay' in d),'legacy hard homeDay pre-assignment must stay removed');
@@ -53,17 +53,32 @@ jobs:
           NODE
       - name: H-M-B + Arthur solver scenarios
         run: node tests/solver.test.js
+      - name: Clock isolation invariants
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('app-core.js','utf8');
+          const assert=(x,m)=>{if(!x)throw new Error(m)};
+          assert(s.includes("clockMode:'system'"),'system clock must be the default');
+          assert(s.includes('simulationPlan:{18:null,19:null}'),'simulation plan sandbox missing');
+          assert(s.includes("function setDay(d){state.viewDay=Number(d);save();render()}"),'day tabs must be view-only');
+          assert(s.includes("Simulation en lecture seule · le plan réel est protégé"),'simulation write guard missing');
+          assert(s.includes("if(isSimulation()){\n    state.simulationPlan="),'simulation recalculation must write only to sandbox');
+          assert(!s.includes('if(isLiveDay(state.day)||'),'legacy live-day boot recalculation must stay removed');
+          assert(s.includes('Le simple passage du temps ou le changement d’onglet ne déclenche plus de recalcul silencieux.'),'clock safety diagnostic missing');
+          console.log('Clock isolation OK');
+          NODE
       - name: Mobile fail-fast boot
         run: |
-          grep -q "VERSION='1.4.1'" app.js
+          grep -q "VERSION='1.4.2'" app.js
           grep -q "SCRIPT_TIMEOUT_MS=4500" app.js
           grep -q "seedInstantPlan" app.js
           grep -q "renderInstantFallback" app.js
           grep -q "PUY_BOOT_DIAG_V1" app.js
           grep -q "Recharger avec force" app.js
           grep -Fq "bootState?.solverMeta?.fallback" app.js
-          grep -q "15 activités" app.js
-          grep -q "puy-planner-v1.4.1" sw.js
+          grep -q "horloge système ou simulation isolée" app.js
+          grep -q "puy-planner-v1.4.2" sw.js
           node <<'NODE'
           const fs=require('fs');
           const s=fs.readFileSync('app-core.js','utf8');
@@ -86,7 +101,7 @@ jobs:
           grep -q './solver.js' index.html
           grep -q 'serviceWorker' app-core.js
           grep -q 'ChatGPT est nécessaire' app-core.js
-          grep -q 'PUY_STATE_V2' app-core.js
+          grep -q 'PUY_STATE_V3' app-core.js
       - name: No accidental remote runtime dependency
         run: |
           ! grep -Eqi '<script[^>]+src="https?://|<link[^>]+href="https?://' index.html
