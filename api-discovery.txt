@@ -1,3 +1,0 @@
-Trying https://baba-store.vercel.app/api/download/app-75704420-puy-du-fou-france
-Trying https://d.apkpure.com/b/APK/fr.puydufou.android?version=latest
-APK_DOWNLOAD_FAILED
