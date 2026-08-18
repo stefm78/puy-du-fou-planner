@@ -1,0 +1,56 @@
+name: Probe Puy app endpoints
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/probe-puy-app-endpoints.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download and inspect official Android package
+        shell: bash
+        run: |
+          set -u
+          mkdir -p official/apk-probe
+          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/151 Safari/537.36'
+          URL='https://d.apkpure.net/b/APK/fr.puydufou.android?version=latest'
+          code=$(curl -sS -L --connect-timeout 20 --max-time 240 -A "$UA" -o official/apk-probe/app.apk -w '%{http_code}' "$URL" || true)
+          echo "fetched_at=$(date -u +%FT%TZ)" > official/apk-probe/report.txt
+          echo "http=$code" >> official/apk-probe/report.txt
+          echo "bytes=$(wc -c < official/apk-probe/app.apk 2>/dev/null || echo 0)" >> official/apk-probe/report.txt
+          file official/apk-probe/app.apk >> official/apk-probe/report.txt 2>/dev/null || true
+          unzip -q official/apk-probe/app.apk -d official/apk-probe/unpacked || true
+          find official/apk-probe/unpacked -type f -printf '%s %p\n' 2>/dev/null | sort -nr | head -80 > official/apk-probe/largest-files.txt || true
+
+          # Scan the package itself and likely native/runtime payloads. Keep only endpoint-shaped strings.
+          {
+            strings -a official/apk-probe/app.apk 2>/dev/null || true
+            find official/apk-probe/unpacked -type f \( -name '*.so' -o -name '*.dex' -o -name '*.arsc' -o -name '*.json' -o -name '*.xml' -o -name '*.js' -o -name '*.bundle' \) -size -120M -print0 2>/dev/null | xargs -0 -r strings -a 2>/dev/null || true
+          } | grep -Eio 'https?://[^"[:space:]<>]+' | sed 's/[),;]$//' | sort -u | head -2000 > official/apk-probe/all-urls.txt || true
+
+          grep -Ei 'puydufou|puy-du-fou|graphql|api|programme|program|schedule|planning|affluence|attendance|spectacle' official/apk-probe/all-urls.txt | head -500 > official/apk-probe/relevant-urls.txt || true
+
+          {
+            strings -a official/apk-probe/app.apk 2>/dev/null || true
+            find official/apk-probe/unpacked -type f \( -name '*.so' -o -name '*.dex' -o -name '*.arsc' -o -name '*.json' -o -name '*.xml' -o -name '*.js' -o -name '*.bundle' \) -size -120M -print0 2>/dev/null | xargs -0 -r strings -a 2>/dev/null || true
+          } | grep -Ei 'programme|program|schedule|planning|showtime|spectacle|affluence|attendance|graphql|base.?url|endpoint' | head -1000 > official/apk-probe/relevant-strings.txt || true
+
+          echo "urls=$(grep -c . official/apk-probe/all-urls.txt 2>/dev/null || echo 0)" >> official/apk-probe/report.txt
+          echo "relevant_urls=$(grep -c . official/apk-probe/relevant-urls.txt 2>/dev/null || echo 0)" >> official/apk-probe/report.txt
+          rm -rf official/apk-probe/unpacked official/apk-probe/app.apk
+      - name: Commit probe result
+        shell: bash
+        run: |
+          git config user.name 'puy-program-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add official/apk-probe
+          git commit -m 'Capture app endpoint probe [apk-probe-result]' || exit 0
+          git push
