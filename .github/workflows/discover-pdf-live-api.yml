@@ -1,0 +1,57 @@
+name: Discover Puy du Fou live API
+
+on:
+  push:
+    paths:
+      - '.github/workflows/discover-pdf-live-api.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Download public Puy du Fou APK
+        shell: bash
+        run: |
+          set -u
+          URLS=(
+            'https://baba-store.vercel.app/api/download/app-75704420-puy-du-fou-france'
+            'https://d.apkpure.com/b/APK/fr.puydufou.android?version=latest'
+          )
+          ok=0
+          for url in "${URLS[@]}"; do
+            echo "Trying $url"
+            if curl -A 'Mozilla/5.0' -fL --retry 2 --connect-timeout 15 --max-time 120 "$url" -o /tmp/puy.apk; then
+              echo "Downloaded $(stat -c%s /tmp/puy.apk) bytes"
+              file /tmp/puy.apk
+              if unzip -t /tmp/puy.apk >/dev/null 2>&1; then ok=1; break; fi
+            fi
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo 'APK_DOWNLOAD_FAILED'
+            exit 2
+          fi
+      - name: Extract candidate endpoints and affluence strings
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/puy && mkdir /tmp/puy
+          unzip -q /tmp/puy.apk -d /tmp/puy
+          echo '=== URL CANDIDATES ==='
+          find /tmp/puy -type f -size -80M -print0 | xargs -0 strings 2>/dev/null \
+            | grep -Eo 'https?://[^[:space:]"<>]+' \
+            | sed 's/[),;].*$//' \
+            | sort -u \
+            | grep -Ei 'puy|api|mobile|cdn|program|show|spect|afflu|crowd|occup|tribun' \
+            | head -250 || true
+          echo '=== KEYWORD CONTEXT ==='
+          find /tmp/puy -type f -size -80M -print0 | xargs -0 strings 2>/dev/null \
+            | grep -Ei -C 3 'affluence|remplissage|tribune|occupancy|crowd|filling|fill.?rate|attendance' \
+            | head -500 || true
+          echo '=== RETROFIT / API HINTS ==='
+          find /tmp/puy -type f -size -80M -print0 | xargs -0 strings 2>/dev/null \
+            | grep -Ei -C 2 'base.?url|retrofit|graphql|/api/|programme|programmes|sessions|seances|shows' \
+            | head -500 || true
