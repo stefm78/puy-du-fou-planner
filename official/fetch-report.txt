@@ -1,6 +1,7 @@
-fetched_at=2026-08-18T16:51:48Z
+fetched_at=2026-08-18T16:52:58Z
 source=https://www.puydufou.com/france/fr/programme-du-jour
 page_http=403
 page_bytes=919
 candidate_count=0
 pdf_url=NOT_FOUND
+apk_http=200 apk_type=application/vnd.android.package-archive apk_bytes=57671680
