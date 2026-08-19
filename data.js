@@ -2,7 +2,7 @@ window.PUY_DATA = {
   sourceEdit: "17/08/2026 19:48",
   sourceEdits: {18:"17/08/2026 19:48",19:"18/08/2026 15:52"},
   sourceHashes: {19:"f5c5d8d5d7941440e42ad4ffa1aa67a0209a0bb795477febe214f887cb7bdb54"},
-  appVersion: "1.4.4",
+  appVersion: "1.4.5",
   engineVersion: 4,
   placementPriorityMin: 40,
   normalShowBufferMin: 10,
