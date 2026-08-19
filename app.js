@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const VERSION='1.4.4';
+const VERSION='1.4.5';
 const STORE='puyPlannerV4';
 const SCRIPT_TIMEOUT_MS=4500;
 const status=document.getElementById('sourceLine');
